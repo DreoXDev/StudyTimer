@@ -12,8 +12,8 @@ const props = defineProps({
   },
 })
 
-const size = 300
-const strokeWidth = 8
+const size = 360
+const strokeWidth = 3
 const radius = (size - strokeWidth * 2) / 2
 const circumference = 2 * Math.PI * radius
 
@@ -27,7 +27,7 @@ const strokeDashoffset = computed(() => {
     <svg :width="size" :height="size" class="transform -rotate-90">
       <!-- Background Circle Track -->
       <circle
-        class="text-muted/20"
+        class="text-muted/10"
         stroke="currentColor"
         :stroke-width="strokeWidth"
         fill="transparent"
@@ -40,8 +40,8 @@ const strokeDashoffset = computed(() => {
         class="text-primary transition-all duration-300 ease-out"
         :class="{
           'animate-pulse': status === 'running',
-          'drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]': status === 'running',
-          'opacity-50': status === 'paused',
+          'drop-shadow-[0_0_12px_rgba(239,68,68,0.3)]': status === 'running',
+          'opacity-40': status === 'paused',
         }"
         stroke="currentColor"
         :stroke-width="strokeWidth"
@@ -65,11 +65,11 @@ const strokeDashoffset = computed(() => {
 @keyframes pulse {
   0%, 100% {
     opacity: 1;
-    filter: drop-shadow(0 0 8px rgba(239,68,68,0.6));
+    filter: drop-shadow(0 0 10px rgba(239,68,68,0.5));
   }
   50% {
-    opacity: 0.85;
-    filter: drop-shadow(0 0 14px rgba(239,68,68,0.3));
+    opacity: 0.8;
+    filter: drop-shadow(0 0 16px rgba(239,68,68,0.2));
   }
 }
 

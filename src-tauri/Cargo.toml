@@ -28,3 +28,11 @@ chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 thiserror = "2"
 
+[target.'cfg(windows)'.dependencies.windows]
+version = "0.61.3"
+features = [
+    "Media_Control",
+    "Foundation",
+    "Storage_Streams"
+]
+

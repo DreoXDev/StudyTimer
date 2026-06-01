@@ -3,6 +3,7 @@ use tauri::Manager;
 pub mod db;
 pub mod models;
 pub mod commands;
+pub mod media;
 
 pub struct AppState {
     pub db: sqlx::SqlitePool,
@@ -54,6 +55,11 @@ pub fn run() {
             commands::tasks::update_task_completed,
             commands::tasks::delete_task,
             commands::tasks::reorder_tasks,
+            // Media/System controls
+            media::get_now_playing,
+            media::media_play_pause,
+            media::media_next,
+            media::media_previous,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,15 +1,22 @@
 # Study Timer
 
-A calm dark-themed desktop study dashboard built with Tauri 2, Vue 3, TailwindCSS and shadcn-vue.
+An immersive, calm Focus Home desktop application built with Tauri 2, Vue 3, TailwindCSS, and shadcn-vue. Designed to serve as a secondary screen companion during study sessions, featuring a dark minimalist aesthetic with glassmorphic elements and soft red accents.
 
 ## Features
 
-- **Aesthetic Focus Timer**: Circular progress, customizable intervals, and custom durations with a relaxing dark/red pulsing glow during execution.
-- **Persistent Session Logging**: Automated recording of finished or interrupted study sessions to a local SQLite database.
-- **Interactive Task List**: CRUD functionality for task tracking (completed items move to the bottom).
-- **Current Clock & Local Date**: Glancable digital clock formatting.
-- **Spotify Now Playing Widget**: Interactive mockup demonstrating future OAuth integration with music progress and play/pause controls.
-- **Local SQLite Persistence**: Powered by Rust, `sqlx` migrations, and local application data path storage.
+- **Immersive Focus Home**: Clean layout containing only essential info when studying to minimize distractions.
+- **Large Central Timer**: A cardless, minimalist central timer with support for manual minute editing (click the digits to edit).
+- **Collapsible Sidebars**:
+  - **Left Sidebar**: Displays study session history, daily/weekly stats, and a form to manually log study sessions done outside the app.
+  - **Right Sidebar**: A checklist for tasks that acts as a quick-glance panel.
+- **Custom App Titlebar**: Replaces native OS window decorations with a custom borderless design supporting window dragging, minimization, maximization, and closing.
+- **Native System Now Playing**:
+  - Integrates with the **Windows Global System Media Transport Controls (GSMTC)**.
+  - Automatically fetches metadata (title, artist, app source, play state, progress, and duration) from active system audio sessions (e.g. Spotify Desktop, Chrome/YouTube, Edge, VLC).
+  - Allows direct play/pause, next, and previous actions on the active media session.
+  - **No OAuth Required**: Works out of the box without requiring API keys or Spotify login.
+  - **Cross-Platform Mock Fallback**: Automatically falls back to an interactive mock track on non-Windows platforms.
+- **SQLite Persistence**: Rust-powered backend running migration-managed local SQLite storage in the user's AppData directory.
 
 ## Development
 
@@ -32,9 +39,10 @@ pnpm tauri build
 
 ## Tech Stack
 
-- **Desktop Framework**: Tauri 2 + Rust
+- **Desktop Framework**: Tauri 2 + Rust (utilizing the `windows` crate for native GSMTC integration)
 - **Frontend Framework**: Vue 3 + TypeScript
 - **State Management**: Pinia
 - **CSS Utility**: TailwindCSS v4
 - **UI Components**: shadcn-vue
 - **Database**: SQLite via `sqlx` (Rust backend)
+
