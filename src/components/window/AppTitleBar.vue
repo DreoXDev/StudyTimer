@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { getCurrentWindow } from '@tauri-apps/api/window'
+import { useRoute } from 'vue-router'
 import { Minimize2, Maximize2, Minus, Square, X, Calendar, CheckSquare } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/ui.store'
 import { storeToRefs } from 'pinia'
@@ -7,7 +8,8 @@ import SmokingCounterDropdown from '@/components/tracking/SmokingCounterDropdown
 
 const appWindow = getCurrentWindow()
 const uiStore = useUiStore()
-const { sessionsSidebarOpen, tasksSidebarOpen, isFullscreen, currentView } = storeToRefs(uiStore)
+const route = useRoute()
+const { sessionsSidebarOpen, tasksSidebarOpen, isFullscreen } = storeToRefs(uiStore)
 
 const minimizeWindow = async () => {
   await appWindow.minimize()
@@ -20,6 +22,14 @@ const toggleMaximizeWindow = async () => {
 const closeWindow = async () => {
   await appWindow.close()
 }
+
+const navItems = [
+  { label: 'Focus', path: '/' },
+  { label: 'Stats', path: '/stats' },
+  { label: 'Habits', path: '/habits' },
+  { label: 'Workouts', path: '/workouts' },
+  { label: 'Settings', path: '/settings' },
+]
 </script>
 
 <template>
@@ -38,12 +48,12 @@ const closeWindow = async () => {
       <SmokingCounterDropdown />
     </div>
 
-    <!-- Center Section: Navigation & Sidebar Toggles (not draggable to allow clicking) -->
+    <!-- Center Section: Navigation & Sidebar Toggles -->
     <div class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center z-40">
-      <!-- Left Sidebar Toggle (Sessioni) -->
-      <div class="w-28 flex justify-end mr-2">
+      <!-- Left Sidebar Toggle (Sessioni) — only on Focus page -->
+      <div class="w-24 flex justify-end mr-2">
         <button
-          v-if="currentView === 'home'"
+          v-if="route.path === '/'"
           class="h-7 px-3 flex items-center gap-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-all duration-200"
           :class="
             sessionsSidebarOpen
@@ -59,34 +69,25 @@ const closeWindow = async () => {
 
       <!-- Main Nav Toggle -->
       <div class="flex items-center bg-muted/40 p-0.5 rounded-lg border border-border/30">
-        <button
-          class="h-7 px-3 rounded-md text-xs font-semibold transition-all cursor-pointer flex items-center justify-center font-sans"
+        <RouterLink
+          v-for="item in navItems"
+          :key="item.path"
+          :to="item.path"
+          class="h-7 px-3 rounded-md text-xs font-semibold transition-all cursor-pointer flex items-center justify-center font-sans no-underline"
           :class="
-            currentView === 'home'
+            route.path === item.path
               ? 'bg-background text-foreground shadow-sm border border-border/30'
               : 'text-muted-foreground hover:text-foreground'
           "
-          @click="uiStore.setView('home')"
         >
-          Focus
-        </button>
-        <button
-          class="h-7 px-3 rounded-md text-xs font-semibold transition-all cursor-pointer flex items-center justify-center font-sans"
-          :class="
-            currentView === 'stats'
-              ? 'bg-background text-foreground shadow-sm border border-border/30'
-              : 'text-muted-foreground hover:text-foreground'
-          "
-          @click="uiStore.setView('stats')"
-        >
-          Stats
-        </button>
+          {{ item.label }}
+        </RouterLink>
       </div>
 
-      <!-- Right Sidebar Toggle (Task) -->
-      <div class="w-28 flex justify-start ml-2">
+      <!-- Right Sidebar Toggle (Task) — only on Focus page -->
+      <div class="w-24 flex justify-start ml-2">
         <button
-          v-if="currentView === 'home'"
+          v-if="route.path === '/'"
           class="h-7 px-3 flex items-center gap-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-all duration-200"
           :class="
             tasksSidebarOpen
@@ -139,4 +140,3 @@ const closeWindow = async () => {
     </div>
   </div>
 </template>
-

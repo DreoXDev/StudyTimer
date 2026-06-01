@@ -37,21 +37,29 @@ pub fn run() {
         .setup(|app| {
             // Initialize database synchronously on setup
             let pool = tauri::async_runtime::block_on(async {
-                db::init_db(app).await
-            }).expect("failed to initialize SQLite database");
+                let p = db::init_db(app).await.expect("failed to initialize SQLite database");
+                // Seed default habits (e.g. Smoking)
+                if let Err(e) = commands::habits::seed_default_habits(&p).await {
+                    eprintln!("Habit seed error: {}", e);
+                }
+                p
+            });
 
             app.manage(AppState { db: pool });
 
             // System Tray Setup
             use tauri::menu::{Menu, MenuItem};
             use tauri::tray::{TrayIconBuilder, TrayIconEvent};
+            use tauri::Emitter;
 
             let quit_i = MenuItem::with_id(app, "quit", "Esci", true, None::<&str>)?;
             let show_i = MenuItem::with_id(app, "show", "Apri StudyTimer", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show_i, &quit_i])?;
+            let toggle_timer_i = MenuItem::with_id(app, "toggle_timer", "Avvia/Pausa Timer", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&show_i, &toggle_timer_i, &quit_i])?;
 
             let mut tray_builder = TrayIconBuilder::new()
                 .menu(&menu)
+                .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| {
                     match event.id.as_ref() {
                         "quit" => {
@@ -63,15 +71,21 @@ pub fn run() {
                                 let _ = window.set_focus();
                             }
                         }
+                        "toggle_timer" => {
+                            let _ = app.emit("tray-timer-toggle", ());
+                        }
                         _ => {}
                     }
                 })
                 .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click { .. } = event {
-                        let app = tray.app_handle();
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
+                    if let TrayIconEvent::Click { button, .. } = event {
+                        use tauri::tray::MouseButton;
+                        if button == MouseButton::Left {
+                            let app = tray.app_handle();
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
                         }
                     }
                 });
@@ -121,6 +135,23 @@ pub fn run() {
             commands::sync::update_event_sync_status,
             commands::sync::get_unsynced_events,
             commands::sync::upsert_synced_event,
+            // Habit commands
+            commands::habits::list_habits,
+            commands::habits::create_habit,
+            commands::habits::update_habit,
+            commands::habits::delete_habit,
+            commands::habits::upsert_habit_entry,
+            commands::habits::increment_habit_entry,
+            commands::habits::get_habit_entries_range,
+            commands::habits::get_all_habit_entries_range,
+            // Workout commands
+            commands::workouts::list_workout_templates,
+            commands::workouts::create_workout_template,
+            commands::workouts::delete_workout_template,
+            commands::workouts::list_workout_logs,
+            commands::workouts::get_workout_logs_range,
+            commands::workouts::create_workout_log,
+            commands::workouts::delete_workout_log,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
