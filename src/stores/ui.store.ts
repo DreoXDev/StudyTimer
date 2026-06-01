@@ -6,8 +6,15 @@ export const useUiStore = defineStore('ui', () => {
   const sessionsSidebarOpen = ref(false)
   const tasksSidebarOpen = ref(false)
   const isFullscreen = ref(false)
+  const currentView = ref<'home' | 'stats'>('home')
 
   const appWindow = getCurrentWindow()
+
+  function setView(view: 'home' | 'stats') {
+    currentView.value = view
+    sessionsSidebarOpen.value = false
+    tasksSidebarOpen.value = false
+  }
 
   function toggleSessionsSidebar() {
     sessionsSidebarOpen.value = !sessionsSidebarOpen.value
@@ -43,6 +50,8 @@ export const useUiStore = defineStore('ui', () => {
     sessionsSidebarOpen,
     tasksSidebarOpen,
     isFullscreen,
+    currentView,
+    setView,
     toggleSessionsSidebar,
     toggleTasksSidebar,
     closeSidebars,

@@ -6,6 +6,11 @@ An immersive, calm Focus Home desktop application built with Tauri 2, Vue 3, Tai
 
 - **Immersive Focus Home**: Clean layout containing only essential info when studying to minimize distractions.
 - **Large Central Timer**: A cardless, minimalist central timer with support for manual minute editing (click the digits to edit).
+- **Smoking Tracker Dropdown**: A discrete title bar widget for tracking today's cigarette counts, offering manual `+` and `-` actions, along with healthy reminders ("Il fumo uccide").
+- **Minimize-to-Tray Mode**: Intercepts standard close commands to hide the application in the system tray, keeping background timers and active widgets alive. Exit is cleanly accessed through the tray menu.
+- **Dedicated Stats Dashboard**: A second view featuring aggregated Metrics cards, visual CSS charts for study time and fumo tracking, and an interactive raw log timeline with delete functionality.
+- **Local Exporter**: Allows exporting tracking logs to CSV, JSON, or formatted Obsidian Markdown.
+- **Offline-First Cloud Sync (Supabase)**: Connects SQLite storage with Supabase cloud databases using user authentication and Row Level Security (RLS) policies without exposing private backend credentials.
 - **Collapsible Sidebars**:
   - **Left Sidebar**: Displays study session history, daily/weekly stats, and a form to manually log study sessions done outside the app.
   - **Right Sidebar**: A checklist for tasks that acts as a quick-glance panel.

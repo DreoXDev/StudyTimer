@@ -2,6 +2,8 @@ import { defineStore } from 'pinia'
 import { ref, computed, onUnmounted } from 'vue'
 import { useSessionStore } from './session.store'
 import { toast } from 'vue-sonner'
+import { api } from '@/lib/tauri'
+import { useSyncStore } from './sync.store'
 
 export const useTimerStore = defineStore('timer', () => {
   const status = ref<'idle' | 'running' | 'paused' | 'completed'>('idle')
@@ -66,18 +68,45 @@ export const useTimerStore = defineStore('timer', () => {
       const elapsed = elapsedSeconds.value
       if (elapsed >= 60) {
         const sessionStore = useSessionStore()
+        const completedStartedAt = startedAt.value
+        const completedEndedAt = Date.now()
+        const completedPlannedSeconds = plannedDurationSeconds.value
+        const completedMode = mode.value
+
         sessionStore.createSession({
           id: Date.now().toString(),
-          startedAt: new Date(startedAt.value).toISOString(),
-          endedAt: new Date().toISOString(),
-          plannedDurationSeconds: plannedDurationSeconds.value,
+          startedAt: new Date(completedStartedAt).toISOString(),
+          endedAt: new Date(completedEndedAt).toISOString(),
+          plannedDurationSeconds: completedPlannedSeconds,
           actualDurationSeconds: elapsed,
           completed: false,
-          mode: mode.value,
+          mode: completedMode,
           note: 'Interrotta manualmente',
         })
         .then(() => toast.info('Sessione interrotta salvata nel registro.'))
         .catch(err => console.error('Errore nel salvataggio della sessione interrotta:', err))
+
+        // Also log tracking event for interrupted session
+        const eventId = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString()
+        api.tracking.createEvent({
+          id: eventId,
+          eventType: 'study_session',
+          startedAt: new Date(completedStartedAt).toISOString(),
+          endedAt: new Date(completedEndedAt).toISOString(),
+          durationSeconds: elapsed,
+          value: elapsed as number,
+          unit: 'seconds',
+          source: 'automatic',
+          note: 'Interrotta manualmente',
+          metadataJson: JSON.stringify({ completed: false, mode: completedMode })
+        })
+        .then(() => {
+          const syncStore = useSyncStore()
+          if (syncStore.isAuthenticated) {
+            syncStore.sync().catch(err => console.error('Errore sync in background:', err))
+          }
+        })
+        .catch(err => console.error('Errore nel salvataggio del tracking event della sessione interrotta:', err))
       }
     }
 
@@ -150,8 +179,9 @@ export const useTimerStore = defineStore('timer', () => {
 
     try {
       const sessionStore = useSessionStore()
+      const sessionId = Date.now().toString()
       await sessionStore.createSession({
-        id: Date.now().toString(),
+        id: sessionId,
         startedAt: new Date(completedStartedAt).toISOString(),
         endedAt: new Date(completedEndedAt).toISOString(),
         plannedDurationSeconds: completedPlannedSeconds,
@@ -159,7 +189,29 @@ export const useTimerStore = defineStore('timer', () => {
         completed: true,
         mode: completedMode,
       })
+
+      // Also log tracking event
+      const eventId = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString()
+      await api.tracking.createEvent({
+        id: eventId,
+        eventType: 'study_session',
+        startedAt: new Date(completedStartedAt).toISOString(),
+        endedAt: new Date(completedEndedAt).toISOString(),
+        durationSeconds: completedPlannedSeconds,
+        value: completedPlannedSeconds as number,
+        unit: 'seconds',
+        source: 'automatic',
+        note: `Sessione ${completedMode} completata`,
+        metadataJson: JSON.stringify({ completed: true, mode: completedMode })
+      })
+
       toast.success('Sessione completata e salvata nel registro!')
+
+      // Trigger background sync
+      const syncStore = useSyncStore()
+      if (syncStore.isAuthenticated) {
+        syncStore.sync().catch(err => console.error('Errore sync in background:', err))
+      }
     } catch (error) {
       console.error('Failed to save completed study session:', error)
       toast.error('Timer completato, ma il salvataggio della sessione è fallito.')

@@ -3,18 +3,23 @@ import { onMounted, onUnmounted } from 'vue'
 import AppTitleBar from '../components/window/AppTitleBar.vue'
 import SessionsSidebar from '../components/sessions/SessionsSidebar.vue'
 import TasksSidebar from '../components/tasks/TasksSidebar.vue'
-import CurrentClock from '../components/clock/CurrentClock.vue'
-import StudyTimer from '../components/timer/StudyTimer.vue'
-import NowPlayingCompact from '../components/spotify/NowPlayingCompact.vue'
+import HomeView from '../views/HomeView.vue'
+import StatsView from '../views/StatsView.vue'
 import { useUiStore } from '@/stores/ui.store'
 import { useSessionStore } from '@/stores/session.store'
 import { useTaskStore } from '@/stores/task.store'
 import { useMediaStore } from '@/stores/media.store'
+import { useSmokingStore } from '@/stores/smoking.store'
+import { useSyncStore } from '@/stores/sync.store'
 
 const uiStore = useUiStore()
 const sessionStore = useSessionStore()
 const taskStore = useTaskStore()
 const mediaStore = useMediaStore()
+const smokingStore = useSmokingStore()
+const syncStore = useSyncStore()
+
+let syncIntervalId: number | null = null
 
 const handleKeyDown = (e: KeyboardEvent) => {
   if (e.key === 'F11') {
@@ -33,12 +38,49 @@ onMounted(async () => {
     sessionStore.loadSessions(),
     sessionStore.loadStats(),
     taskStore.loadTasks(),
+    smokingStore.loadSmokingTodayCount(),
+    syncStore.init()
   ])
+  
+  // Perform initial sync if user is logged in
+  if (syncStore.isAuthenticated) {
+    try {
+      const synced = await syncStore.sync()
+      if (synced) {
+        // Refresh local data to reflect cloud updates
+        await Promise.all([
+          sessionStore.loadSessions(),
+          sessionStore.loadStats(),
+          smokingStore.loadSmokingTodayCount()
+        ])
+      }
+    } catch (e) {
+      console.error('Errore durante sync iniziale all\'avvio:', e)
+    }
+  }
+
+  // Set up periodic background sync every 5 minutes
+  syncIntervalId = window.setInterval(async () => {
+    if (syncStore.isAuthenticated && !syncStore.syncing) {
+      const synced = await syncStore.sync()
+      if (synced) {
+        await Promise.all([
+          sessionStore.loadSessions(),
+          sessionStore.loadStats(),
+          smokingStore.loadSmokingTodayCount()
+        ])
+      }
+    }
+  }, 5 * 60 * 1000)
+
   mediaStore.refreshNowPlaying()
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
+  if (syncIntervalId !== null) {
+    clearInterval(syncIntervalId)
+  }
 })
 </script>
 
@@ -48,38 +90,16 @@ onUnmounted(() => {
     <!-- Custom Windows Titlebar -->
     <AppTitleBar class="shrink-0" />
 
-    <!-- Sidebars Overlay Components -->
-    <SessionsSidebar />
-    <TasksSidebar />
+    <!-- Sidebars Overlay Components (only active in Home/Focus view) -->
+    <template v-if="uiStore.currentView === 'home'">
+      <SessionsSidebar />
+      <TasksSidebar />
+    </template>
 
-    <!-- Focus Environment Main Viewport -->
-    <div class="flex-1 w-full relative flex flex-col justify-between items-center py-6 px-8 h-[calc(100vh-40px)]">
-      
-      <!-- Top Ambient Gradient Background Effects -->
-      <div class="absolute -top-40 left-1/4 right-1/4 h-80 rounded-full bg-primary/3 blur-[120px] pointer-events-none"></div>
-      <div class="absolute -bottom-40 left-5 h-80 w-80 rounded-full bg-primary/2 blur-[100px] pointer-events-none"></div>
-
-      <!-- Header Row: Digital Clock (Centered) -->
-      <div class="w-full flex items-center justify-center shrink-0 h-14 z-10">
-        <CurrentClock />
-      </div>
-
-      <!-- Main Center Section: Focus Timer -->
-      <main class="flex-1 flex items-center justify-center w-full z-10 max-h-[500px]">
-        <StudyTimer />
-      </main>
-
-      <!-- Bottom Layout Section: Left NowPlaying, Center/Right empty (clean look) -->
-      <div class="w-full flex items-end justify-between shrink-0 h-20 z-10">
-        
-        <!-- Bottom Left: System Media controller -->
-        <NowPlayingCompact />
-
-        <!-- Bottom Right is empty for a cleaner look -->
-        <div class="w-10"></div>
-
-      </div>
-
+    <!-- Main Viewport -->
+    <div class="flex-1 w-full relative">
+      <HomeView v-if="uiStore.currentView === 'home'" />
+      <StatsView v-else />
     </div>
   </div>
 </template>
@@ -101,3 +121,4 @@ onUnmounted(() => {
   background: rgba(239, 68, 68, 0.25);
 }
 </style>
+
