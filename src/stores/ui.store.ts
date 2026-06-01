@@ -1,9 +1,13 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 
 export const useUiStore = defineStore('ui', () => {
   const sessionsSidebarOpen = ref(false)
   const tasksSidebarOpen = ref(false)
+  const isFullscreen = ref(false)
+
+  const appWindow = getCurrentWindow()
 
   function toggleSessionsSidebar() {
     sessionsSidebarOpen.value = !sessionsSidebarOpen.value
@@ -24,11 +28,25 @@ export const useUiStore = defineStore('ui', () => {
     tasksSidebarOpen.value = false
   }
 
+  async function toggleFullscreen() {
+    const next = !isFullscreen.value
+    await appWindow.setFullscreen(next)
+    isFullscreen.value = next
+  }
+
+  async function setFullscreen(value: boolean) {
+    await appWindow.setFullscreen(value)
+    isFullscreen.value = value
+  }
+
   return {
     sessionsSidebarOpen,
     tasksSidebarOpen,
+    isFullscreen,
     toggleSessionsSidebar,
     toggleTasksSidebar,
     closeSidebars,
+    toggleFullscreen,
+    setFullscreen,
   }
 })

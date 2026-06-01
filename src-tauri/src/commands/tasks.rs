@@ -33,7 +33,7 @@ pub async fn create_task(
     Ok(Task {
         id,
         title,
-        completed: 0,
+        completed: false,
         created_at,
         completed_at: None,
         sort_order,
@@ -60,7 +60,6 @@ pub async fn update_task_completed(
     completed: bool,
     state: State<'_, AppState>,
 ) -> Result<Task, AppError> {
-    let completed_val = if completed { 1 } else { 0 };
     let completed_at = if completed {
         Some(Utc::now().to_rfc3339())
     } else {
@@ -68,7 +67,7 @@ pub async fn update_task_completed(
     };
 
     sqlx::query("UPDATE tasks SET completed = ?, completed_at = ? WHERE id = ?")
-        .bind(completed_val)
+        .bind(completed)
         .bind(&completed_at)
         .bind(&id)
         .execute(&state.db)

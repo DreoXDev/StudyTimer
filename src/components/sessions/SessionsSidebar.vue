@@ -83,19 +83,17 @@ const addManualSession = async () => {
         </button>
       </div>
 
-      <!-- Sidebar Content (Scrollable) -->
-      <div class="flex-1 overflow-y-auto p-5 space-y-6">
+      <!-- Sidebar Content (Fixed stats at top, scrollable history list) -->
+      <div class="flex-1 flex flex-col p-5 min-h-0 overflow-hidden gap-5">
         <!-- Statistics Section -->
-        <div class="space-y-2">
+        <div class="shrink-0 space-y-2">
           <h3 class="text-xs font-bold text-muted-foreground uppercase tracking-widest">Statistiche</h3>
-          <div class="h-24">
-            <StudyStats />
-          </div>
+          <StudyStats />
         </div>
 
-        <!-- History Log List -->
-        <div class="flex-1 flex flex-col min-h-[300px]">
-          <SessionLog class="border-0 p-0 bg-transparent shadow-none" />
+        <!-- History Log List (Internal scroll inside SessionLog component) -->
+        <div class="flex-1 min-h-0 flex flex-col">
+          <SessionLog class="flex-1 border-0 p-0 bg-transparent shadow-none" />
         </div>
       </div>
 

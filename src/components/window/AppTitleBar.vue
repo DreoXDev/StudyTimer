@@ -1,12 +1,12 @@
 <script lang="ts" setup>
 import { getCurrentWindow } from '@tauri-apps/api/window'
-import { Minimize2, Square, X, Calendar, CheckSquare } from 'lucide-vue-next'
+import { Minimize2, Maximize2, Minus, Square, X, Calendar, CheckSquare } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/ui.store'
 import { storeToRefs } from 'pinia'
 
 const appWindow = getCurrentWindow()
 const uiStore = useUiStore()
-const { sessionsSidebarOpen, tasksSidebarOpen } = storeToRefs(uiStore)
+const { sessionsSidebarOpen, tasksSidebarOpen, isFullscreen } = storeToRefs(uiStore)
 
 const minimizeWindow = async () => {
   await appWindow.minimize()
@@ -63,14 +63,24 @@ const closeWindow = async () => {
       </button>
     </div>
 
-    <!-- Right Section: Minimize, Maximize, Close -->
+    <!-- Right Section: Fullscreen, Minimize, Maximize, Close -->
     <div class="flex items-center h-full">
+      <!-- Full Focus (Fullscreen Toggle) -->
+      <button
+        class="h-full w-10 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors duration-150 cursor-pointer"
+        :title="isFullscreen ? 'Esci da Full Focus' : 'Attiva Full Focus'"
+        @click="uiStore.toggleFullscreen()"
+      >
+        <Minimize2 v-if="isFullscreen" class="h-3.5 w-3.5 text-primary" />
+        <Maximize2 v-else class="h-3.5 w-3.5" />
+      </button>
+
       <button
         class="h-full w-10 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors duration-150 cursor-pointer"
         title="Riduci a icona"
         @click="minimizeWindow"
       >
-        <Minimize2 class="h-3.5 w-3.5" />
+        <Minus class="h-3.5 w-3.5" />
       </button>
 
       <button

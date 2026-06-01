@@ -14,6 +14,7 @@ const {
   plannedDurationSeconds,
   remainingSeconds,
   progress,
+  canEditDuration,
 } = storeToRefs(timerStore)
 
 const timeFormatted = computed(() => {
@@ -48,7 +49,7 @@ const editMinutes = ref(Math.floor(plannedDurationSeconds.value / 60))
 const editInput = ref<HTMLInputElement | null>(null)
 
 const startEditing = () => {
-  if (status.value === 'idle' || status.value === 'completed') {
+  if (canEditDuration.value) {
     editMinutes.value = Math.floor(plannedDurationSeconds.value / 60)
     isEditing.value = true
     nextTick(() => {
@@ -77,7 +78,7 @@ const saveEditing = () => {
         {{ modeLabel }}
       </Badge>
     </div>
-
+ 
     <!-- Timer Central Ring (Glow circle) -->
     <div class="my-6 flex items-center justify-center flex-1">
       <TimerRing :progress="progress" :status="status">
@@ -98,15 +99,24 @@ const saveEditing = () => {
             <span class="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mt-1.5">Modifica min</span>
           </div>
           
-          <div v-else class="flex flex-col items-center cursor-pointer group" @click="startEditing" title="Clicca per inserire i minuti a mano">
-            <span class="font-mono text-6xl font-bold tracking-tight tabular-nums transition-colors group-hover:text-primary">
+          <div 
+            v-else 
+            class="flex flex-col items-center select-none" 
+            :class="canEditDuration ? 'cursor-pointer group' : 'cursor-not-allowed opacity-75'" 
+            @click="startEditing" 
+            :title="canEditDuration ? 'Clicca per inserire i minuti a mano' : ''"
+          >
+            <span 
+              class="font-mono text-6xl font-bold tracking-tight tabular-nums transition-colors"
+              :class="canEditDuration ? 'group-hover:text-primary' : ''"
+            >
               {{ timeFormatted }}
             </span>
-            <span class="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mt-1.5 transition-opacity duration-200" :class="status === 'idle' ? 'opacity-100' : 'opacity-60'">
+            <span class="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mt-1.5 transition-opacity duration-200" :class="canEditDuration ? 'opacity-100' : 'opacity-50'">
               {{ status === 'idle' ? 'Imposta' : status }}
             </span>
           </div>
-
+ 
         </div>
       </TimerRing>
     </div>

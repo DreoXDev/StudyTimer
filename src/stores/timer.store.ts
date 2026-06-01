@@ -100,10 +100,7 @@ export const useTimerStore = defineStore('timer', () => {
     const nextRemaining = plannedDurationSeconds.value - elapsedSecs
 
     if (nextRemaining <= 0) {
-      remainingSeconds.value = 0
-      status.value = 'completed'
-      stopTicking()
-      onTimerCompleted()
+      void completeTimer()
     } else {
       remainingSeconds.value = nextRemaining
     }
@@ -122,13 +119,26 @@ export const useTimerStore = defineStore('timer', () => {
     }
   }
 
-  // This will be overridden or extended in Phase E to call Tauri commands
+  const canEditDuration = computed(() => status.value === 'idle' || status.value === 'completed')
+
   const onCompletedCallbacks: Array<() => void> = []
   function onCompleted(callback: () => void) {
     onCompletedCallbacks.push(callback)
   }
 
-  function onTimerCompleted() {
+  async function completeTimer() {
+    if (status.value === 'completed') return
+    if (startedAt.value === null) return
+
+    const completedStartedAt = startedAt.value
+    const completedEndedAt = Date.now()
+    const completedPlannedSeconds = plannedDurationSeconds.value
+    const completedMode = mode.value
+
+    status.value = 'completed'
+    remainingSeconds.value = 0
+    stopTicking()
+
     // Play sound notification
     try {
       const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-84.wav')
@@ -138,33 +148,41 @@ export const useTimerStore = defineStore('timer', () => {
       console.log('Audio playback not supported or blocked')
     }
 
-    // Save completed session to SQLite
-    if (startedAt.value !== null) {
+    try {
       const sessionStore = useSessionStore()
-      sessionStore.createSession({
+      await sessionStore.createSession({
         id: Date.now().toString(),
-        startedAt: new Date(startedAt.value).toISOString(),
-        endedAt: new Date().toISOString(),
-        plannedDurationSeconds: plannedDurationSeconds.value,
-        actualDurationSeconds: plannedDurationSeconds.value,
+        startedAt: new Date(completedStartedAt).toISOString(),
+        endedAt: new Date(completedEndedAt).toISOString(),
+        plannedDurationSeconds: completedPlannedSeconds,
+        actualDurationSeconds: completedPlannedSeconds,
         completed: true,
-        mode: mode.value,
+        mode: completedMode,
       })
-      .then(() => toast.success('Sessione completata e salvata nel registro!'))
-      .catch(err => console.error('Errore nel salvataggio della sessione completata:', err))
+      toast.success('Sessione completata e salvata nel registro!')
+    } catch (error) {
+      console.error('Failed to save completed study session:', error)
+      toast.error('Timer completato, ma il salvataggio della sessione è fallito.')
     }
 
-    // Trigger registered callbacks
     for (const cb of onCompletedCallbacks) {
       cb()
     }
   }
 
   function setPreset(seconds: number, newMode: 'focus' | 'break' | 'deep') {
+    if (!canEditDuration.value) return
     plannedDurationSeconds.value = seconds
     remainingSeconds.value = seconds
     mode.value = newMode
     reset()
+  }
+
+  function setCustomDuration(minutes: number) {
+    if (!canEditDuration.value) return
+    const safeMinutes = Math.min(240, Math.max(1, Math.floor(minutes)))
+    plannedDurationSeconds.value = safeMinutes * 60
+    remainingSeconds.value = safeMinutes * 60
   }
 
   onUnmounted(() => {
@@ -181,11 +199,13 @@ export const useTimerStore = defineStore('timer', () => {
     startedAt,
     pausedAt,
     accumulatedPausedMs,
+    canEditDuration,
     start,
     pause,
     resume,
     reset,
     setPreset,
+    setCustomDuration,
     onCompleted,
   }
 })

@@ -1,7 +1,6 @@
 <script lang="ts" setup>
 import { storeToRefs } from 'pinia'
 import { useSessionStore } from '@/stores/session.store'
-import { BarChart3, Timer, Calendar } from 'lucide-vue-next'
 
 const sessionStore = useSessionStore()
 const { stats } = storeToRefs(sessionStore)
@@ -15,38 +14,29 @@ const formatDuration = (minutes: number) => {
 </script>
 
 <template>
-  <div class="grid grid-cols-3 gap-4 h-full">
+  <div class="grid grid-cols-3 gap-2">
     <!-- Today Time Card -->
-    <div class="flex items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm">
-      <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-        <Timer class="h-5 w-5" />
-      </div>
-      <div class="overflow-hidden">
-        <p class="text-xs font-semibold text-muted-foreground uppercase tracking-wider truncate">Studio Oggi</p>
-        <p class="text-lg font-bold tracking-tight mt-0.5 truncate">{{ formatDuration(stats.todayMinutes) }}</p>
-      </div>
+    <div class="flex flex-col items-center justify-center rounded-xl border border-border bg-background/55 py-2 px-1 text-center shadow-sm">
+      <span class="text-[9px] font-bold text-muted-foreground uppercase tracking-widest leading-tight">Oggi</span>
+      <span class="text-sm font-bold tracking-tight text-foreground mt-1 tabular-nums leading-none">
+        {{ formatDuration(stats.todayMinutes) }}
+      </span>
     </div>
 
     <!-- Today Sessions Card -->
-    <div class="flex items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm">
-      <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-        <BarChart3 class="h-5 w-5" />
-      </div>
-      <div class="overflow-hidden">
-        <p class="text-xs font-semibold text-muted-foreground uppercase tracking-wider truncate">Sessioni</p>
-        <p class="text-lg font-bold tracking-tight mt-0.5 truncate">{{ stats.todaySessionsCount }}</p>
-      </div>
+    <div class="flex flex-col items-center justify-center rounded-xl border border-border bg-background/55 py-2 px-1 text-center shadow-sm">
+      <span class="text-[9px] font-bold text-muted-foreground uppercase tracking-widest leading-tight">Sessioni</span>
+      <span class="text-sm font-bold tracking-tight text-foreground mt-1 tabular-nums leading-none">
+        {{ stats.todaySessionsCount }}
+      </span>
     </div>
 
     <!-- Week Time Card -->
-    <div class="flex items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm">
-      <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-        <Calendar class="h-5 w-5" />
-      </div>
-      <div class="overflow-hidden">
-        <p class="text-xs font-semibold text-muted-foreground uppercase tracking-wider truncate">Ultimi 7 Giorni</p>
-        <p class="text-lg font-bold tracking-tight mt-0.5 truncate">{{ formatDuration(stats.weekMinutes) }}</p>
-      </div>
+    <div class="flex flex-col items-center justify-center rounded-xl border border-border bg-background/55 py-2 px-1 text-center shadow-sm">
+      <span class="text-[9px] font-bold text-muted-foreground uppercase tracking-widest leading-tight">7 Giorni</span>
+      <span class="text-sm font-bold tracking-tight text-foreground mt-1 tabular-nums leading-none">
+        {{ formatDuration(stats.weekMinutes) }}
+      </span>
     </div>
   </div>
 </template>

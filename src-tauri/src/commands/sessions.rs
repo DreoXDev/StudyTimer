@@ -4,6 +4,7 @@ use crate::AppError;
 use crate::models::session::{StudySession, CreateSessionPayload};
 
 #[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StudyStats {
     pub today_minutes: i64,
     pub today_sessions_count: i64,
@@ -15,8 +16,6 @@ pub async fn create_session(
     payload: CreateSessionPayload,
     state: State<'_, AppState>,
 ) -> Result<StudySession, AppError> {
-    let completed_val = if payload.completed { 1 } else { 0 };
-
     sqlx::query(
         "INSERT INTO study_sessions (id, started_at, ended_at, planned_duration_seconds, actual_duration_seconds, completed, mode, note)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
@@ -26,7 +25,7 @@ pub async fn create_session(
     .bind(&payload.ended_at)
     .bind(payload.planned_duration_seconds)
     .bind(payload.actual_duration_seconds)
-    .bind(completed_val)
+    .bind(payload.completed)
     .bind(&payload.mode)
     .bind(&payload.note)
     .execute(&state.db)
@@ -38,7 +37,7 @@ pub async fn create_session(
         ended_at: payload.ended_at,
         planned_duration_seconds: payload.planned_duration_seconds,
         actual_duration_seconds: payload.actual_duration_seconds,
-        completed: completed_val,
+        completed: payload.completed,
         mode: payload.mode,
         note: payload.note,
     })
