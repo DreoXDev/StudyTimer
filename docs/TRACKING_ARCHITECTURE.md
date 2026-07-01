@@ -1,16 +1,15 @@
 # Architettura del Tracking System
 
-Questo documento descrive il sistema di tracciamento ad eventi estensibili (Event-Driven Tracking System) di StudyTimer, che gestisce sia le sessioni di studio sia le abitudini come il consumo di sigarette (fumo).
+Questo documento descrive il sistema di tracciamento ad eventi estensibili (Event-Driven Tracking System) di StudyTimer, che gestisce le sessioni di studio dell'applicazione.
 
 ## Visione Generale
 
-Per superare i limiti di un database relazionale rigido basato su tabelle specifiche per singole metriche, abbiamo introdotto una tabella generica chiamata `tracking_events`. Questo approccio permette di estendere l'applicazione con nuove metriche (es. acqua, sonno, pause, mood) semplicemente modificando il payload del frontend senza dover alterare le migrazioni SQLite locali.
+Per superare i limiti di un database relazionale rigido basato su tabelle specifiche per singole metriche, abbiamo introdotto una tabella generica chiamata `tracking_events`. Questo approccio permette di estendere l'applicazione con nuove metriche (es. pause, mood, tempo focalizzato) semplicemente modificando il payload del frontend senza dover alterare le migrazioni SQLite locali.
 
 ```mermaid
 graph TD
     subgraph Frontend Vue 3
         Timer[StudyTimer.vue] -->|Termina/Interrompe| TimerStore[timer.store.ts]
-        TitleBar[SmokingDropdown.vue] -->|Incrementa/Decrementa| SmokingStore[smoking.store.ts]
         StatsView[StatsView.vue] -->|Aggrega| Summary
     end
 
@@ -28,7 +27,6 @@ graph TD
     end
 
     TimerStore -->|api.tracking.createEvent| TauriAPI
-    SmokingStore -->|api.tracking.addCigarette| TauriAPI
     TauriAPI --> TrackingCmds
     TrackingCmds --> TrackingModels
     TrackingModels -->|SQLx Query| SQLite
@@ -78,16 +76,6 @@ Generato in automatico quando un timer viene completato o interrotto (se la dura
     "mode": "focus"      // 'focus', 'deep', 'break'
   }
   ```
-
-### 2. Consumo Sigarette (`cigarette_smoked`)
-Generato tramite interazione con il dropdown in titlebar.
-- **started_at**: Timestamp corrente.
-- **ended_at**: Timestamp corrente.
-- **duration_seconds**: `NULL`.
-- **value**: `1.0`.
-- **unit**: `'cigarette'`.
-- **source**: `'manual'`.
-- **metadata_json**: `NULL`.
 
 ---
 

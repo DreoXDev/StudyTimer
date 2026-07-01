@@ -82,4 +82,4 @@ Il flusso di sincronizzazione si articola in tre fasi distinte coordinate da `sy
 Per mantenere il sistema rapido ed efficiente, la risoluzione dei conflitti segue la regola **Last-Write-Wins** basandosi sul campo `updated_at`:
 - SQLite e Supabase memorizzano data e ora di modifica di ciascun evento.
 - In fase di sincronizzazione, l'evento con il timestamp `updated_at` più recente sovrascrive quello precedente.
-- Le sigarette eliminate o le sessioni rimosse utilizzano la cancellazione logica (**Soft Delete**) inserendo la data corrente in `deleted_at`. Questo assicura che lo stato rimosso possa propagarsi correttamente tra tutti i dispositivi associati all'account.
+- Le sessioni rimosse utilizzano la cancellazione logica (**Soft Delete**) inserendo la data corrente in `deleted_at`. Questo assicura che lo stato rimosso possa propagarsi correttamente tra tutti i dispositivi associati all'account.
