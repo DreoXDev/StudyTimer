@@ -4,7 +4,7 @@ import Toaster from '@/components/ui/sonner/Sonner.vue'
 </script>
 
 <template>
-  <main class="dark min-h-screen bg-background text-foreground">
+  <main class="min-h-screen bg-background text-foreground">
     <AppShell />
     <Toaster />
   </main>

@@ -1,23 +1,17 @@
 <script lang="ts" setup>
 import { ref, computed, onMounted, watch } from 'vue'
-import { storeToRefs } from 'pinia'
 import {
   Clock,
-  Cigarette,
   Calendar,
-  ArrowDownToLine,
   RefreshCw,
-  Cloud,
-  Lock,
   Trash2,
   TrendingUp,
-  LogOut,
-  Info
+  CheckSquare,
+  Cloud
 } from 'lucide-vue-next'
 
 import { api } from '@/lib/tauri'
-import { useSyncStore } from '@/stores/sync.store'
-import { useSmokingStore } from '@/stores/smoking.store'
+import { useTaskStore } from '@/stores/task.store'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -31,10 +25,7 @@ import { Label } from '@/components/ui/label'
 import { toast } from 'vue-sonner'
 import type { TrackingEvent, TrackingSummary } from '@/types/tracking'
 
-const syncStore = useSyncStore()
-const smokingStore = useSmokingStore()
-const { isAuthenticated, syncing, userEmail, isConfigured } = storeToRefs(syncStore)
-
+const taskStore = useTaskStore()
 const rangeType = ref<'today' | 'week' | 'month' | 'year' | 'custom'>('week')
 const customStartDate = ref('')
 const customEndDate = ref('')
@@ -42,17 +33,6 @@ const customEndDate = ref('')
 const summary = ref<TrackingSummary | null>(null)
 const recentEvents = ref<TrackingEvent[]>([])
 const loading = ref(false)
-
-// Supabase Auth Form
-const authEmail = ref('')
-const authPassword = ref('')
-const authLoading = ref(false)
-const authMode = ref<'login' | 'signup'>('login')
-
-// Export Form
-const exportFormat = ref<'json' | 'csv' | 'markdown'>('csv')
-const exportStudy = ref(true)
-const exportSmoking = ref(true)
 
 // Helper: Calculate range dates in ISO strings
 function calculateBoundaries() {
@@ -131,8 +111,8 @@ async function loadData() {
     // Fetch Summary
     summary.value = await api.tracking.getSummary(start, end, granularity)
     
-    // Fetch Recent Events
-    recentEvents.value = await api.tracking.listEvents(undefined, start, end, 50)
+    // Fetch Recent Events (only study_sessions)
+    recentEvents.value = await api.tracking.listEvents('study_session', start, end, 50)
   } catch (e: any) {
     console.error('Errore nel caricamento delle statistiche:', e)
     toast.error('Errore nel caricamento dei dati di tracciamento.')
@@ -155,8 +135,8 @@ watch([customStartDate, customEndDate], () => {
 })
 
 onMounted(async () => {
-  await syncStore.init()
   await loadData()
+  await taskStore.loadTasks()
 })
 
 // Metrics computation
@@ -174,8 +154,71 @@ const averageSessionMins = computed(() => {
   return `${Math.round(secs / 60)} min`
 })
 
-const totalCigarettes = computed(() => {
-  return summary.value ? summary.value.smoking.totalCigarettes : 0
+// Task Metrics
+const totalTasksCount = computed(() => taskStore.tasks.length)
+const completedTasksCount = computed(() => taskStore.tasks.filter(t => t.completed).length)
+const taskCompletionRate = computed(() => {
+  if (totalTasksCount.value === 0) return 0
+  return Math.round((completedTasksCount.value / totalTasksCount.value) * 100)
+})
+
+// Filter completed tasks by range boundaries
+const tasksCompletedInPeriod = computed(() => {
+  const { start, end } = calculateBoundaries()
+  const startTime = new Date(start).getTime()
+  const endTime = new Date(end).getTime()
+  
+  return taskStore.tasks.filter(t => {
+    if (!t.completed || !t.completedAt) return false
+    const compTime = new Date(t.completedAt).getTime()
+    return compTime >= startTime && compTime <= endTime
+  })
+})
+
+const tasksAddedInPeriod = computed(() => {
+  const { start, end } = calculateBoundaries()
+  const startTime = new Date(start).getTime()
+  const endTime = new Date(end).getTime()
+  
+  return taskStore.tasks.filter(t => {
+    const createTime = new Date(t.createdAt).getTime()
+    return createTime >= startTime && createTime <= endTime
+  })
+})
+
+// Group completed tasks by bucket
+const tasksCompletedByBucket = computed(() => {
+  if (!summary.value || taskStore.tasks.length === 0) return []
+  const granularity = calculateBoundaries().granularity
+  
+  return summary.value.study.byBucket.map(b => {
+    const bucketStr = b.bucket // e.g. "2026-07-01" or "2026-07-01T11"
+    let count = 0
+    
+    for (const task of taskStore.tasks) {
+      if (task.completed && task.completedAt) {
+        const compDate = task.completedAt // ISO string
+        if (granularity === 'day') {
+          if (compDate.substring(0, 10) === bucketStr.substring(0, 10)) {
+            count++
+          }
+        } else if (granularity === 'hour') {
+          if (compDate.substring(0, 13) === bucketStr.substring(0, 13)) {
+            count++
+          }
+        } else if (granularity === 'month') {
+          if (compDate.substring(0, 7) === bucketStr.substring(0, 7)) {
+            count++
+          }
+        }
+      }
+    }
+    
+    return {
+      bucket: b.bucket,
+      count
+    }
+  })
 })
 
 // Max values for chart scaling
@@ -184,9 +227,9 @@ const maxStudySeconds = computed(() => {
   return Math.max(...summary.value.study.byBucket.map(b => b.seconds), 1)
 })
 
-const maxCigarettes = computed(() => {
-  if (!summary.value || summary.value.smoking.byBucket.length === 0) return 1
-  return Math.max(...summary.value.smoking.byBucket.map(b => b.count), 1)
+const maxCompletedTasks = computed(() => {
+  if (tasksCompletedByBucket.value.length === 0) return 1
+  return Math.max(...tasksCompletedByBucket.value.map(b => b.count), 1)
 })
 
 // Format Bucket labels
@@ -229,12 +272,11 @@ function formatSeconds(secs: number) {
 
 // Delete Event Handlers
 async function handleDeleteEvent(id: string) {
-  if (confirm('Sei sicuro di voler eliminare questo evento permanentemente?')) {
+  if (confirm('Sei sicuro di voler eliminare questa sessione permanentemente?')) {
     try {
       await api.tracking.deleteEvent(id)
       toast.success('Log eliminato correttamente.')
       await loadData()
-      await smokingStore.loadSmokingTodayCount() // Update fumo dropdown count as well
     } catch (e) {
       console.error(e)
       toast.error('Errore durante l\'eliminazione del log.')
@@ -247,8 +289,6 @@ function getEventBadgeClass(type: string) {
   switch (type) {
     case 'study_session':
       return 'bg-green-500/10 border-green-500/20 text-green-400'
-    case 'cigarette_smoked':
-      return 'bg-red-500/10 border-red-500/20 text-primary'
     case 'timer_interrupted':
       return 'bg-yellow-500/10 border-yellow-500/20 text-yellow-400'
     default:
@@ -259,87 +299,11 @@ function getEventBadgeClass(type: string) {
 function getEventLabel(type: string) {
   switch (type) {
     case 'study_session': return 'Studio'
-    case 'cigarette_smoked': return 'Fumo'
     case 'timer_interrupted': return 'Interrotto'
     default: return type
   }
 }
 
-// Sync execution
-async function handleSync() {
-  toast.promise(syncStore.sync(), {
-    loading: 'Sincronizzazione in corso...',
-    success: (res: boolean) => {
-      if (res) {
-        loadData()
-        smokingStore.loadSmokingTodayCount()
-        return 'Sincronizzazione completata!'
-      } else {
-        throw new Error()
-      }
-    },
-    error: () => syncStore.error || 'Sincronizzazione fallita.'
-  })
-}
-
-// Auth submission
-async function handleAuth() {
-  authLoading.value = true
-  try {
-    if (authMode.value === 'login') {
-      await syncStore.login(authEmail.value, authPassword.value)
-      toast.success('Autenticazione riuscita!')
-    } else {
-      await syncStore.signup(authEmail.value, authPassword.value)
-      toast.success('Registrazione completata! Controlla la tua email.')
-    }
-    authEmail.value = ''
-    authPassword.value = ''
-  } catch (e: any) {
-    toast.error(e.message || 'Errore di autenticazione.')
-  } finally {
-    authLoading.value = false
-  }
-}
-
-// Export Trigger
-async function handleExport() {
-  const { start, end } = calculateBoundaries()
-  const types: string[] = []
-  if (exportStudy.value) types.push('study_session')
-  if (exportSmoking.value) types.push('cigarette_smoked')
-
-  if (types.length === 0) {
-    toast.error('Seleziona almeno un tipo di dato da esportare.')
-    return
-  }
-
-  try {
-    const rawData = await api.export.exportData(exportFormat.value, start, end, types)
-    if (!rawData) {
-      toast.info('Nessun dato trovato per l\'esportazione in questo periodo.')
-      return
-    }
-
-    const blob = new Blob([rawData], { type: 'text/plain;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    
-    let ext = 'csv'
-    if (exportFormat.value === 'json') ext = 'json'
-    else if (exportFormat.value === 'markdown') ext = 'md'
-
-    a.download = `studytimer_export_${rangeType.value}_${new Date().toISOString().slice(0, 10)}.${ext}`
-    a.click()
-    URL.revokeObjectURL(url)
-    
-    toast.success('Esportazione completata con successo!')
-  } catch (e) {
-    console.error('Esportazione fallita:', e)
-    toast.error('Errore durante l\'esportazione.')
-  }
-}
 </script>
 
 <template>
@@ -354,7 +318,7 @@ async function handleExport() {
           <TrendingUp class="h-5 w-5 text-primary" />
           Statistiche & Tracker
         </h1>
-        <p class="text-xs text-muted-foreground">Analizza le sessioni di studio, abitudini ed esporta i log locali.</p>
+        <p class="text-xs text-muted-foreground">Analizza le sessioni di studio, le task completate ed esporta i log locali.</p>
       </div>
 
       <!-- Range Picker Button Group -->
@@ -389,6 +353,7 @@ async function handleExport() {
 
     <!-- Top Metrics Overview -->
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6 z-10 relative">
+      <!-- Tempo Studio -->
       <Card class="bg-card/30 border-border/30 backdrop-blur-sm shadow-sm">
         <CardContent class="p-4 flex items-center gap-3">
           <div class="p-2.5 rounded-lg bg-green-500/10 text-green-400">
@@ -401,18 +366,22 @@ async function handleExport() {
         </CardContent>
       </Card>
 
+      <!-- Task Completate -->
       <Card class="bg-card/30 border-border/30 backdrop-blur-sm shadow-sm">
         <CardContent class="p-4 flex items-center gap-3">
           <div class="p-2.5 rounded-lg bg-primary/10 text-primary">
-            <Cigarette class="h-5 w-5" />
+            <CheckSquare class="h-5 w-5" />
           </div>
           <div>
-            <p class="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Sigarette</p>
-            <h3 class="text-lg font-bold font-mono tracking-tight text-foreground mt-0.5">{{ totalCigarettes }}</h3>
+            <p class="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Task Completate</p>
+            <h3 class="text-lg font-bold font-mono tracking-tight text-foreground mt-0.5">
+              {{ completedTasksCount }} <span class="text-xs font-normal text-muted-foreground">/ {{ totalTasksCount }}</span>
+            </h3>
           </div>
         </CardContent>
       </Card>
 
+      <!-- Media Sessione -->
       <Card class="bg-card/30 border-border/30 backdrop-blur-sm shadow-sm">
         <CardContent class="p-4 flex items-center gap-3">
           <div class="p-2.5 rounded-lg bg-blue-500/10 text-blue-400">
@@ -425,6 +394,7 @@ async function handleExport() {
         </CardContent>
       </Card>
 
+      <!-- Sessioni Completate -->
       <Card class="bg-card/30 border-border/30 backdrop-blur-sm shadow-sm">
         <CardContent class="p-4 flex items-center gap-3">
           <div class="p-2.5 rounded-lg bg-yellow-500/10 text-yellow-400">
@@ -482,40 +452,40 @@ async function handleExport() {
         </CardContent>
       </Card>
 
-      <!-- Smoking Chart -->
+      <!-- Task Completed Chart -->
       <Card class="bg-card/30 border-border/30 backdrop-blur-sm shadow-sm">
         <CardHeader class="p-4 pb-0">
           <CardTitle class="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
-            <span>Consumo Sigarette</span>
-            <Cigarette class="h-4 w-4 text-primary" />
+            <span>Task Completate (Quantità)</span>
+            <CheckSquare class="h-4 w-4 text-primary" />
           </CardTitle>
         </CardHeader>
         <CardContent class="p-4">
           <div v-if="loading" class="h-48 flex items-center justify-center">
             <RefreshCw class="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
-          <div v-else-if="!summary || summary.smoking.byBucket.length === 0" class="h-48 flex flex-col items-center justify-center text-center">
-            <Cigarette class="h-8 w-8 text-muted-foreground/30 mb-2" />
-            <p class="text-xs text-muted-foreground">Nessun dato di fumo in questo periodo.</p>
+          <div v-else-if="tasksCompletedByBucket.length === 0" class="h-48 flex flex-col items-center justify-center text-center">
+            <CheckSquare class="h-8 w-8 text-muted-foreground/30 mb-2" />
+            <p class="text-xs text-muted-foreground">Nessun task completato in questo periodo.</p>
           </div>
           <div v-else class="h-48 flex items-end justify-between gap-1 pt-6 overflow-x-auto select-none min-w-[200px] border-b border-border/30">
             <div
-              v-for="b in summary.smoking.byBucket"
+              v-for="b in tasksCompletedByBucket"
               :key="b.bucket"
               class="flex-1 flex flex-col items-center group min-w-[20px] max-w-[50px] h-full justify-end relative"
             >
               <!-- Tooltip on Hover -->
               <div class="absolute bottom-full mb-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none bg-background/95 border border-border/50 text-[10px] text-foreground font-mono font-bold px-2 py-1 rounded shadow-lg z-20 whitespace-nowrap">
-                {{ b.count }} {{ b.count === 1 ? 'sigaretta' : 'sigarette' }}
+                {{ b.count }} {{ b.count === 1 ? 'task completato' : 'task completati' }}
               </div>
               <!-- Vertical Bar -->
               <div
                 class="w-full bg-primary/20 hover:bg-primary/60 border border-primary/20 hover:border-primary/40 rounded-t-sm transition-all duration-200"
-                :style="{ height: `${(b.count / maxCigarettes) * 90}%` }"
+                :style="{ height: `${(b.count / maxCompletedTasks) * 90}%` }"
               ></div>
               <!-- Label below -->
               <span class="text-[8px] font-mono text-muted-foreground mt-2 truncate w-full text-center">
-                {{ formatBucketLabel(b.bucket, summary.rangeEnd ? calculateBoundaries().granularity : 'day') }}
+                {{ formatBucketLabel(b.bucket, summary?.rangeEnd ? calculateBoundaries().granularity : 'day') }}
               </span>
             </div>
           </div>
@@ -556,11 +526,8 @@ async function handleExport() {
                 </div>
                 <div>
                   <div class="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                    <span v-if="event.eventType === 'study_session'" class="font-mono">
+                    <span class="font-mono">
                       {{ formatSeconds(event.durationSeconds || 0) }}
-                    </span>
-                    <span v-else-if="event.eventType === 'cigarette_smoked'">
-                      1 sigaretta
                     </span>
                     <span v-if="event.note" class="text-[10px] font-normal text-muted-foreground">
                       - {{ event.note }}
@@ -591,159 +558,47 @@ async function handleExport() {
         </CardContent>
       </Card>
 
-      <!-- Settings & Cloud Sync Tools (5 columns) -->
+      <!-- Settings Tools (5 columns) -->
       <div class="lg:col-span-5 space-y-6">
-        <!-- Supabase Cloud Sync Card -->
+        <!-- Stats details card -->
         <Card class="bg-card/25 border-border/20 backdrop-blur-sm shadow-sm">
           <CardHeader class="p-4 pb-2">
             <CardTitle class="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
-              <span>Sincronizzazione Supabase</span>
-              <Cloud class="h-4 w-4" :class="isAuthenticated ? 'text-green-400' : 'text-muted-foreground'" />
+              <span>Dettaglio Attività Periodo</span>
+              <TrendingUp class="h-4 w-4 text-primary" />
             </CardTitle>
           </CardHeader>
           <CardContent class="p-4 space-y-4">
-            <!-- Case 1: Supabase not configured in .env -->
-            <div v-if="!isConfigured" class="flex gap-2.5 p-3 rounded-lg border border-yellow-500/20 bg-yellow-500/5 text-yellow-400 text-xs">
-              <Info class="h-4 w-4 shrink-0 mt-0.5" />
-              <div class="space-y-1 leading-normal">
-                <p class="font-bold uppercase text-[9px] tracking-wider">Missing Config</p>
-                <p class="text-[10px] text-yellow-400/80">Configura `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` nel file `.env` per attivare la sincronizzazione cloud.</p>
+            <div class="space-y-3.5">
+              <!-- Studio stats -->
+              <div class="flex justify-between items-center py-2 border-b border-border/10">
+                <span class="text-xs text-muted-foreground">Tempo di studio totale</span>
+                <span class="text-xs font-bold text-foreground font-mono">{{ totalStudyHours }}</span>
+              </div>
+              <div class="flex justify-between items-center py-2 border-b border-border/10">
+                <span class="text-xs text-muted-foreground">Sessioni completate</span>
+                <span class="text-xs font-bold text-foreground font-mono">
+                  {{ summary ? summary.study.completedSessions : 0 }} / {{ summary ? (summary.study.completedSessions + summary.study.interruptedSessions) : 0 }}
+                </span>
+              </div>
+
+              <!-- Task stats -->
+              <div class="flex justify-between items-center py-2 border-b border-border/10">
+                <span class="text-xs text-muted-foreground">Task aggiunte nel periodo</span>
+                <span class="text-xs font-bold text-foreground font-mono">{{ tasksAddedInPeriod.length }}</span>
+              </div>
+              <div class="flex justify-between items-center py-2 border-b border-border/10">
+                <span class="text-xs text-muted-foreground">Task completate nel periodo</span>
+                <span class="text-xs font-bold text-foreground font-mono">{{ tasksCompletedInPeriod.length }}</span>
+              </div>
+              <div class="flex justify-between items-center py-2">
+                <span class="text-xs text-muted-foreground">Tasso di completamento generale</span>
+                <span class="text-xs font-bold text-primary font-mono">{{ taskCompletionRate }}%</span>
               </div>
             </div>
-
-            <!-- Case 2: Configured but NOT logged in -->
-            <div v-else-if="!isAuthenticated" class="space-y-3">
-              <div class="text-[10px] text-muted-foreground bg-muted/20 p-2.5 rounded-lg border border-border/30">
-                Sincronizza i dati di studio e tracciamento tra più dispositivi. I dati locali SQLite rimangono primari ed attivi offline.
-              </div>
-
-              <!-- Auth Mode Selector -->
-              <div class="flex bg-muted/40 p-0.5 rounded-lg border border-border/30 gap-px">
-                <button
-                  class="flex-1 h-7 text-[10px] font-bold uppercase tracking-wider rounded-md cursor-pointer transition-all"
-                  :class="authMode === 'login' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
-                  @click="authMode = 'login'"
-                >
-                  Accedi
-                </button>
-                <button
-                  class="flex-1 h-7 text-[10px] font-bold uppercase tracking-wider rounded-md cursor-pointer transition-all"
-                  :class="authMode === 'signup' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
-                  @click="authMode = 'signup'"
-                >
-                  Registrati
-                </button>
-              </div>
-
-              <!-- Login Form -->
-              <form @submit.prevent="handleAuth" class="space-y-3.5">
-                <div class="space-y-1.5">
-                  <Label for="auth-email" class="text-[10px] text-muted-foreground uppercase tracking-wider">Email</Label>
-                  <Input id="auth-email" type="email" placeholder="nome@esempio.com" v-model="authEmail" class="h-8.5 text-xs bg-background/50 border-border/40 focus:border-primary/50 text-foreground" required />
-                </div>
-                <div class="space-y-1.5">
-                  <Label for="auth-pwd" class="text-[10px] text-muted-foreground uppercase tracking-wider">Password</Label>
-                  <Input id="auth-pwd" type="password" placeholder="••••••••" v-model="authPassword" class="h-8.5 text-xs bg-background/50 border-border/40 focus:border-primary/50 text-foreground" required />
-                </div>
-                <Button type="submit" class="w-full h-9 bg-primary hover:bg-primary/95 text-white text-xs font-semibold cursor-pointer" :disabled="authLoading">
-                  <RefreshCw v-if="authLoading" class="mr-2 h-3.5 w-3.5 animate-spin" />
-                  <Lock v-else class="mr-2 h-3.5 w-3.5" />
-                  {{ authMode === 'login' ? 'Accedi al Cloud' : 'Crea Nuovo Account' }}
-                </Button>
-              </form>
-            </div>
-
-            <!-- Case 3: Configured and LOGGED in -->
-            <div v-else class="space-y-4">
-              <div class="flex items-center justify-between p-3 rounded-lg border border-border/30 bg-muted/20">
-                <div class="min-w-0">
-                  <p class="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Account</p>
-                  <p class="text-xs font-semibold truncate text-foreground mt-0.5 font-mono">{{ userEmail }}</p>
-                </div>
-                <Button variant="ghost" size="icon" class="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/5 cursor-pointer rounded-lg" title="Scollega account" @click="syncStore.logout()">
-                  <LogOut class="h-4 w-4" />
-                </Button>
-              </div>
-
-              <!-- Sync actions -->
-              <div class="space-y-2">
-                <div class="flex items-center justify-between text-[10px] text-muted-foreground px-1 font-mono">
-                  <span>Ultimo sync:</span>
-                  <span>{{ syncStore.lastSyncedAt ? new Date(syncStore.lastSyncedAt).toLocaleString('it-IT') : 'Mai' }}</span>
-                </div>
-                <Button
-                  class="w-full h-9 bg-primary hover:bg-primary/95 text-white font-semibold text-xs cursor-pointer shadow-[0_0_10px_rgba(239,68,68,0.15)]"
-                  :disabled="syncing"
-                  @click="handleSync"
-                >
-                  <RefreshCw class="mr-2 h-3.5 w-3.5" :class="{ 'animate-spin': syncing }" />
-                  Sincronizza Ora
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <!-- Data Exporter Card -->
-        <Card class="bg-card/25 border-border/20 backdrop-blur-sm shadow-sm">
-          <CardHeader class="p-4 pb-2">
-            <CardTitle class="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
-              <span>Esporta Dati Locali</span>
-              <ArrowDownToLine class="h-4 w-4 text-muted-foreground" />
-            </CardTitle>
-          </CardHeader>
-          <CardContent class="p-4 space-y-4">
-            <div class="space-y-3">
-              <!-- Format Selection -->
-              <div class="space-y-1.5">
-                <Label class="text-[10px] text-muted-foreground uppercase tracking-wider">Formato File</Label>
-                <div class="flex bg-muted/40 p-0.5 rounded-lg border border-border/30 gap-px">
-                  <button
-                    v-for="fmt in ['csv', 'json', 'markdown']"
-                    :key="fmt"
-                    class="flex-1 h-7 text-[10px] font-bold uppercase tracking-wider rounded-md cursor-pointer transition-all"
-                    :class="exportFormat === fmt ? 'bg-background text-foreground shadow-sm border border-border/30' : 'text-muted-foreground hover:text-foreground'"
-                    @click="exportFormat = fmt as any"
-                  >
-                    {{ fmt === 'markdown' ? 'Obsidian' : fmt }}
-                  </button>
-                </div>
-              </div>
-
-              <!-- Data Types Selection -->
-              <div class="space-y-2.5 pt-1">
-                <Label class="text-[10px] text-muted-foreground uppercase tracking-wider">Dati da Includere</Label>
-                
-                <div class="flex flex-col gap-2 bg-muted/10 p-2.5 rounded-lg border border-border/30">
-                  <label class="flex items-center gap-2.5 text-xs text-foreground cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      v-model="exportStudy"
-                      class="h-4 w-4 rounded border-border bg-background text-primary focus:ring-primary/50 cursor-pointer accent-primary"
-                    />
-                    <span>Sessioni di Studio (study_session)</span>
-                  </label>
-                  
-                  <label class="flex items-center gap-2.5 text-xs text-foreground cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      v-model="exportSmoking"
-                      class="h-4 w-4 rounded border-border bg-background text-primary focus:ring-primary/50 cursor-pointer accent-primary"
-                    />
-                    <span>Registro Fumo (cigarette_smoked)</span>
-                  </label>
-                </div>
-              </div>
-
-              <!-- Export Execute Button -->
-              <Button
-                variant="outline"
-                class="w-full h-9 border-border hover:bg-muted/80 hover:text-foreground text-xs font-semibold cursor-pointer mt-1"
-                @click="handleExport"
-              >
-                <ArrowDownToLine class="mr-2 h-3.5 w-3.5" />
-                Scarica File Esportazione
-              </Button>
+            
+            <div class="text-[10px] text-muted-foreground leading-relaxed bg-muted/20 p-2.5 rounded-lg border border-border/30 mt-2">
+              Nota: Le metriche si basano sull'intervallo temporale selezionato. Modificando l'intervallo in alto, i dati del riepilogo verranno ricalcolati automaticamente.
             </div>
           </CardContent>
         </Card>

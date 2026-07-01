@@ -16,6 +16,7 @@ pub async fn create_session(
     payload: CreateSessionPayload,
     state: State<'_, AppState>,
 ) -> Result<StudySession, AppError> {
+    // 1. Insert into study_sessions
     sqlx::query(
         "INSERT INTO study_sessions (id, started_at, ended_at, planned_duration_seconds, actual_duration_seconds, completed, mode, note)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
@@ -28,6 +29,37 @@ pub async fn create_session(
     .bind(payload.completed)
     .bind(&payload.mode)
     .bind(&payload.note)
+    .execute(&state.db)
+    .await?;
+
+    // 2. Insert into tracking_events
+    let now = chrono::Utc::now().to_rfc3339();
+    let metadata_json = format!("{{\"completed\":{},\"mode\":\"{}\"}}", payload.completed, payload.mode);
+    sqlx::query(
+        "INSERT INTO tracking_events (id, event_type, started_at, ended_at, duration_seconds, value, unit, source, note, metadata_json, created_at, updated_at, sync_status)
+         VALUES (?, 'study_session', ?, ?, ?, ?, 'seconds', 'manual', ?, ?, ?, ?, 'pending')
+         ON CONFLICT(id) DO UPDATE SET
+            event_type = 'study_session',
+            started_at = excluded.started_at,
+            ended_at = excluded.ended_at,
+            duration_seconds = excluded.duration_seconds,
+            value = excluded.value,
+            unit = excluded.unit,
+            source = excluded.source,
+            note = excluded.note,
+            metadata_json = excluded.metadata_json,
+            updated_at = excluded.updated_at,
+            sync_status = 'pending'"
+    )
+    .bind(&payload.id)
+    .bind(&payload.started_at)
+    .bind(&payload.ended_at)
+    .bind(payload.actual_duration_seconds)
+    .bind(payload.actual_duration_seconds as f64)
+    .bind(&payload.note)
+    .bind(&metadata_json)
+    .bind(&now)
+    .bind(&now)
     .execute(&state.db)
     .await?;
 
@@ -68,10 +100,21 @@ pub async fn delete_session(
     id: String,
     state: State<'_, AppState>,
 ) -> Result<(), AppError> {
+    // 1. Delete from study_sessions
     sqlx::query("DELETE FROM study_sessions WHERE id = ?")
-        .bind(id)
+        .bind(&id)
         .execute(&state.db)
         .await?;
+
+    // 2. Soft-delete in tracking_events
+    let now = chrono::Utc::now().to_rfc3339();
+    sqlx::query("UPDATE tracking_events SET deleted_at = ?, updated_at = ?, sync_status = 'pending' WHERE id = ?")
+        .bind(&now)
+        .bind(&now)
+        .bind(&id)
+        .execute(&state.db)
+        .await?;
+
     Ok(())
 }
 

@@ -8,9 +8,9 @@ import { useUiStore } from '@/stores/ui.store'
 import { useSessionStore } from '@/stores/session.store'
 import { useTaskStore } from '@/stores/task.store'
 import { useMediaStore } from '@/stores/media.store'
-import { useSmokingStore } from '@/stores/smoking.store'
 import { useSyncStore } from '@/stores/sync.store'
 import { useTimerStore } from '@/stores/timer.store'
+import { useSettingsStore } from '@/stores/settings.store'
 import { listen } from '@tauri-apps/api/event'
 
 const router = useRouter()
@@ -19,8 +19,8 @@ const uiStore = useUiStore()
 const sessionStore = useSessionStore()
 const taskStore = useTaskStore()
 const mediaStore = useMediaStore()
-const smokingStore = useSmokingStore()
 const syncStore = useSyncStore()
+const settingsStore = useSettingsStore()
 
 let syncIntervalId: number | null = null
 let unlistenToggle: (() => void) | null = null
@@ -52,14 +52,6 @@ const handleKeyDown = (e: KeyboardEvent) => {
         e.preventDefault()
         router.push('/stats')
         break
-      case 'h':
-        e.preventDefault()
-        router.push('/habits')
-        break
-      case 'w':
-        e.preventDefault()
-        router.push('/workouts')
-        break
       case ',':
         e.preventDefault()
         router.push('/settings')
@@ -70,8 +62,8 @@ const handleKeyDown = (e: KeyboardEvent) => {
         break
     }
 
-    // Space — start/pause timer (only on focus page)
-    if (e.code === 'Space' && route.path === '/') {
+    // Space — start/pause timer (only on focus page, if enabled in settings)
+    if (e.code === 'Space' && route.path === '/' && settingsStore.spaceStartStop) {
       e.preventDefault()
       const timerStore = useTimerStore()
       if (timerStore.status === 'running') {
@@ -79,6 +71,13 @@ const handleKeyDown = (e: KeyboardEvent) => {
       } else if (timerStore.status === 'idle' || timerStore.status === 'paused') {
         timerStore.start()
       }
+    }
+
+    // R — reset timer (only on focus page, if enabled in settings)
+    if (e.key.toLowerCase() === 'r' && route.path === '/' && settingsStore.rReset) {
+      e.preventDefault()
+      const timerStore = useTimerStore()
+      timerStore.reset()
     }
   }
 
@@ -90,24 +89,23 @@ const handleKeyDown = (e: KeyboardEvent) => {
 }
 
 onMounted(async () => {
+  settingsStore.init()
   window.addEventListener('keydown', handleKeyDown)
   await Promise.all([
     sessionStore.loadSessions(),
     sessionStore.loadStats(),
     taskStore.loadTasks(),
-    smokingStore.loadSmokingTodayCount(),
     syncStore.init()
   ])
   
-  // Perform initial sync if user is logged in
-  if (syncStore.isAuthenticated) {
+  // Perform initial sync if user is logged in and autoSync is enabled
+  if (syncStore.isAuthenticated && settingsStore.autoSync) {
     try {
       const synced = await syncStore.sync()
       if (synced) {
         await Promise.all([
           sessionStore.loadSessions(),
-          sessionStore.loadStats(),
-          smokingStore.loadSmokingTodayCount()
+          sessionStore.loadStats()
         ])
       }
     } catch (e) {
@@ -115,15 +113,14 @@ onMounted(async () => {
     }
   }
 
-  // Set up periodic background sync every 5 minutes
+  // Set up periodic background sync every 5 minutes (if autoSync is enabled)
   syncIntervalId = window.setInterval(async () => {
-    if (syncStore.isAuthenticated && !syncStore.syncing) {
+    if (syncStore.isAuthenticated && !syncStore.syncing && settingsStore.autoSync) {
       const synced = await syncStore.sync()
       if (synced) {
         await Promise.all([
           sessionStore.loadSessions(),
-          sessionStore.loadStats(),
-          smokingStore.loadSmokingTodayCount()
+          sessionStore.loadStats()
         ])
       }
     }
@@ -159,15 +156,17 @@ onUnmounted(() => {
     <!-- Custom Windows Titlebar -->
     <AppTitleBar class="shrink-0" />
 
-    <!-- Sidebars Overlay Components (only active in Home/Focus route) -->
-    <template v-if="route.path === '/'">
-      <SessionsSidebar />
-      <TasksSidebar />
-    </template>
+    <!-- Sidebars Overlay Components (always active) -->
+    <SessionsSidebar />
+    <TasksSidebar />
 
     <!-- Main Viewport (Router) -->
     <div class="flex-1 w-full relative overflow-hidden">
-      <RouterView />
+      <RouterView v-slot="{ Component }">
+        <Transition name="page" mode="out-in">
+          <component :is="Component" />
+        </Transition>
+      </RouterView>
     </div>
   </div>
 </template>

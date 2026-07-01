@@ -1,15 +1,16 @@
 import { defineStore } from 'pinia'
-import { ref, computed, onUnmounted } from 'vue'
+import { ref, computed, onUnmounted, watch } from 'vue'
 import { useSessionStore } from './session.store'
 import { toast } from 'vue-sonner'
-import { api } from '@/lib/tauri'
 import { useSyncStore } from './sync.store'
+import { useSettingsStore } from './settings.store'
 
 export const useTimerStore = defineStore('timer', () => {
+  const settingsStore = useSettingsStore()
   const status = ref<'idle' | 'running' | 'paused' | 'completed'>('idle')
   const mode = ref<'focus' | 'break' | 'deep'>('focus')
-  const plannedDurationSeconds = ref(25 * 60)
-  const remainingSeconds = ref(25 * 60)
+  const plannedDurationSeconds = ref(settingsStore.defaultFocusDuration)
+  const remainingSeconds = ref(settingsStore.defaultFocusDuration)
 
   const startedAt = ref<number | null>(null)
   const pausedAt = ref<number | null>(null)
@@ -73,8 +74,9 @@ export const useTimerStore = defineStore('timer', () => {
         const completedPlannedSeconds = plannedDurationSeconds.value
         const completedMode = mode.value
 
+        const sessionId = crypto.randomUUID()
         sessionStore.createSession({
-          id: Date.now().toString(),
+          id: sessionId,
           startedAt: new Date(completedStartedAt).toISOString(),
           endedAt: new Date(completedEndedAt).toISOString(),
           plannedDurationSeconds: completedPlannedSeconds,
@@ -83,30 +85,14 @@ export const useTimerStore = defineStore('timer', () => {
           mode: completedMode,
           note: 'Interrotta manualmente',
         })
-        .then(() => toast.info('Sessione interrotta salvata nel registro.'))
-        .catch(err => console.error('Errore nel salvataggio della sessione interrotta:', err))
-
-        // Also log tracking event for interrupted session
-        const eventId = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString()
-        api.tracking.createEvent({
-          id: eventId,
-          eventType: 'study_session',
-          startedAt: new Date(completedStartedAt).toISOString(),
-          endedAt: new Date(completedEndedAt).toISOString(),
-          durationSeconds: elapsed,
-          value: elapsed as number,
-          unit: 'seconds',
-          source: 'automatic',
-          note: 'Interrotta manualmente',
-          metadataJson: JSON.stringify({ completed: false, mode: completedMode })
-        })
         .then(() => {
+          toast.info('Sessione interrotta salvata nel registro.')
           const syncStore = useSyncStore()
           if (syncStore.isAuthenticated) {
             syncStore.sync().catch(err => console.error('Errore sync in background:', err))
           }
         })
-        .catch(err => console.error('Errore nel salvataggio del tracking event della sessione interrotta:', err))
+        .catch(err => console.error('Errore nel salvataggio della sessione interrotta:', err))
       }
     }
 
@@ -179,7 +165,7 @@ export const useTimerStore = defineStore('timer', () => {
 
     try {
       const sessionStore = useSessionStore()
-      const sessionId = Date.now().toString()
+      const sessionId = crypto.randomUUID()
       await sessionStore.createSession({
         id: sessionId,
         startedAt: new Date(completedStartedAt).toISOString(),
@@ -188,21 +174,7 @@ export const useTimerStore = defineStore('timer', () => {
         actualDurationSeconds: completedPlannedSeconds,
         completed: true,
         mode: completedMode,
-      })
-
-      // Also log tracking event
-      const eventId = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString()
-      await api.tracking.createEvent({
-        id: eventId,
-        eventType: 'study_session',
-        startedAt: new Date(completedStartedAt).toISOString(),
-        endedAt: new Date(completedEndedAt).toISOString(),
-        durationSeconds: completedPlannedSeconds,
-        value: completedPlannedSeconds as number,
-        unit: 'seconds',
-        source: 'automatic',
         note: `Sessione ${completedMode} completata`,
-        metadataJson: JSON.stringify({ completed: true, mode: completedMode })
       })
 
       toast.success('Sessione completata e salvata nel registro!')
@@ -220,6 +192,19 @@ export const useTimerStore = defineStore('timer', () => {
     for (const cb of onCompletedCallbacks) {
       cb()
     }
+
+    // Auto-start next mode if enabled
+    if (settingsStore.autoStart) {
+      setTimeout(() => {
+        if (completedMode === 'focus' || completedMode === 'deep') {
+          // Switch to break preset (5m = 300s)
+          setPreset(300, 'break')
+        } else {
+          // Switch to focus preset (defaultFocusDuration)
+          setPreset(settingsStore.defaultFocusDuration, 'focus')
+        }
+      }, 1000) // Small delay to let the toast show up
+    }
   }
 
   function setPreset(seconds: number, newMode: 'focus' | 'break' | 'deep') {
@@ -228,6 +213,9 @@ export const useTimerStore = defineStore('timer', () => {
     remainingSeconds.value = seconds
     mode.value = newMode
     reset()
+    if (settingsStore.autoStart) {
+      start()
+    }
   }
 
   function setCustomDuration(minutes: number) {
@@ -236,6 +224,13 @@ export const useTimerStore = defineStore('timer', () => {
     plannedDurationSeconds.value = safeMinutes * 60
     remainingSeconds.value = safeMinutes * 60
   }
+
+  watch(() => settingsStore.defaultFocusDuration, (newVal) => {
+    if (status.value === 'idle') {
+      plannedDurationSeconds.value = newVal
+      remainingSeconds.value = newVal
+    }
+  })
 
   onUnmounted(() => {
     stopTicking()

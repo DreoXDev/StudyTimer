@@ -10,7 +10,7 @@ const { current } = storeToRefs(mediaStore)
 <template>
   <div
     v-if="current && current.available"
-    class="w-72 h-[72px] rounded-2xl border border-border bg-card/60 backdrop-blur-md px-3.5 py-3 shadow-md flex items-center justify-between gap-3 relative overflow-hidden group select-none"
+    class="w-72 h-[72px] rounded-2xl border border-border bg-card/60 backdrop-blur-md px-3.5 py-3 shadow-md flex items-center justify-between gap-3 relative overflow-hidden group select-none pointer-events-auto"
   >
     <!-- Background thin progress bar at the very bottom -->
     <div class="absolute bottom-0 left-0 right-0 h-[2px] bg-muted/20">
@@ -66,7 +66,7 @@ const { current } = storeToRefs(mediaStore)
 
   <div
     v-else
-    class="w-72 h-[72px] rounded-2xl border border-border/50 bg-card/40 backdrop-blur-md px-4 py-3 flex items-center gap-3 text-muted-foreground opacity-60"
+    class="w-72 h-[72px] rounded-2xl border border-border/50 bg-card/40 backdrop-blur-md px-4 py-3 flex items-center gap-3 text-muted-foreground opacity-60 pointer-events-auto"
   >
     <Music class="h-5 w-5 shrink-0 text-muted-foreground/40" />
     <div class="flex flex-col">

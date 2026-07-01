@@ -1,10 +1,10 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
-import { supabase, isSupabaseConfigured } from '@/lib/supabase'
+import { ref, computed } from 'vue'
+import { getSupabase, isSupabaseConfigured } from '@/lib/supabase'
 import { api } from '@/lib/tauri'
 
 export const useSyncStore = defineStore('sync', () => {
-  const isConfigured = ref(isSupabaseConfigured)
+  const isConfigured = computed(() => isSupabaseConfigured.value)
   const isAuthenticated = ref(false)
   const userEmail = ref<string | null>(null)
   const syncing = ref(false)
@@ -12,7 +12,12 @@ export const useSyncStore = defineStore('sync', () => {
   const lastSyncedAt = ref<string | null>(localStorage.getItem('study_timer_last_synced_at'))
 
   async function init() {
-    if (!isSupabaseConfigured || !supabase) return
+    const supabase = getSupabase()
+    if (!isSupabaseConfigured.value || !supabase) {
+      isAuthenticated.value = false
+      userEmail.value = null
+      return
+    }
 
     try {
       const { data } = await supabase.auth.getSession()
@@ -35,7 +40,8 @@ export const useSyncStore = defineStore('sync', () => {
   }
 
   async function login(email: string, password: string) {
-    if (!isSupabaseConfigured || !supabase) throw new Error('Supabase non configurato')
+    const supabase = getSupabase()
+    if (!isSupabaseConfigured.value || !supabase) throw new Error('Supabase non configurato')
     error.value = null
     const { data, error: authError } = await supabase.auth.signInWithPassword({
       email,
@@ -51,7 +57,8 @@ export const useSyncStore = defineStore('sync', () => {
   }
 
   async function signup(email: string, password: string) {
-    if (!isSupabaseConfigured || !supabase) throw new Error('Supabase non configurato')
+    const supabase = getSupabase()
+    if (!isSupabaseConfigured.value || !supabase) throw new Error('Supabase non configurato')
     error.value = null
     const { data, error: authError } = await supabase.auth.signUp({
       email,
@@ -65,7 +72,8 @@ export const useSyncStore = defineStore('sync', () => {
   }
 
   async function logout() {
-    if (!isSupabaseConfigured || !supabase) return
+    const supabase = getSupabase()
+    if (!isSupabaseConfigured.value || !supabase) return
     await supabase.auth.signOut()
     isAuthenticated.value = false
     userEmail.value = null
@@ -74,7 +82,8 @@ export const useSyncStore = defineStore('sync', () => {
   }
 
   async function sync() {
-    if (!isSupabaseConfigured || !supabase || !isAuthenticated.value) return false
+    const supabase = getSupabase()
+    if (!isSupabaseConfigured.value || !supabase || !isAuthenticated.value) return false
     
     syncing.value = true
     error.value = null

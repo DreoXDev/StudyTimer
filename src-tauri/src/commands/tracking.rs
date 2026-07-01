@@ -103,9 +103,16 @@ pub async fn delete_tracking_event(
     sqlx::query("UPDATE tracking_events SET deleted_at = ?, updated_at = ?, sync_status = 'pending' WHERE id = ?")
         .bind(&now)
         .bind(&now)
-        .bind(id)
+        .bind(&id)
         .execute(&state.db)
         .await?;
+
+    // Also delete from study_sessions (since we only keep study_sessions now)
+    sqlx::query("DELETE FROM study_sessions WHERE id = ?")
+        .bind(&id)
+        .execute(&state.db)
+        .await?;
+
     Ok(())
 }
 

@@ -38,10 +38,6 @@ pub fn run() {
             // Initialize database synchronously on setup
             let pool = tauri::async_runtime::block_on(async {
                 let p = db::init_db(app).await.expect("failed to initialize SQLite database");
-                // Seed default habits (e.g. Smoking)
-                if let Err(e) = commands::habits::seed_default_habits(&p).await {
-                    eprintln!("Habit seed error: {}", e);
-                }
                 p
             });
 
@@ -135,23 +131,6 @@ pub fn run() {
             commands::sync::update_event_sync_status,
             commands::sync::get_unsynced_events,
             commands::sync::upsert_synced_event,
-            // Habit commands
-            commands::habits::list_habits,
-            commands::habits::create_habit,
-            commands::habits::update_habit,
-            commands::habits::delete_habit,
-            commands::habits::upsert_habit_entry,
-            commands::habits::increment_habit_entry,
-            commands::habits::get_habit_entries_range,
-            commands::habits::get_all_habit_entries_range,
-            // Workout commands
-            commands::workouts::list_workout_templates,
-            commands::workouts::create_workout_template,
-            commands::workouts::delete_workout_template,
-            commands::workouts::list_workout_logs,
-            commands::workouts::get_workout_logs_range,
-            commands::workouts::create_workout_log,
-            commands::workouts::delete_workout_log,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

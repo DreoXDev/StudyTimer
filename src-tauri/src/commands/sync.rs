@@ -38,6 +38,7 @@ pub async fn upsert_synced_event(
     event: TrackingEvent,
     state: State<'_, AppState>,
 ) -> Result<(), AppError> {
+    // 1. Upsert into tracking_events
     sqlx::query(
         "INSERT INTO tracking_events (id, event_type, started_at, ended_at, duration_seconds, value, unit, source, note, metadata_json, created_at, updated_at, deleted_at, synced_at, sync_status)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced')
@@ -73,5 +74,46 @@ pub async fn upsert_synced_event(
     .bind(&event.synced_at)
     .execute(&state.db)
     .await?;
+
+    // 2. If it's a study session, keep the study_sessions table in sync
+    if event.event_type == "study_session" {
+        if event.deleted_at.is_some() {
+            sqlx::query("DELETE FROM study_sessions WHERE id = ?")
+                .bind(&event.id)
+                .execute(&state.db)
+                .await?;
+        } else {
+            let completed = event.metadata_json.as_ref().map(|m| m.contains("\"completed\":true")).unwrap_or(true);
+            let mode = if event.metadata_json.as_ref().map(|m| m.contains("\"mode\":\"deep\"")).unwrap_or(false) { "deep" }
+                       else if event.metadata_json.as_ref().map(|m| m.contains("\"mode\":\"break\"")).unwrap_or(false) { "break" }
+                       else { "focus" };
+            let dur = event.duration_seconds.unwrap_or(0);
+            let ended_at_val = event.ended_at.as_ref().unwrap_or(&event.started_at);
+
+            sqlx::query(
+                "INSERT INTO study_sessions (id, started_at, ended_at, planned_duration_seconds, actual_duration_seconds, completed, mode, note)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                 ON CONFLICT(id) DO UPDATE SET
+                    started_at = excluded.started_at,
+                    ended_at = excluded.ended_at,
+                    planned_duration_seconds = excluded.planned_duration_seconds,
+                    actual_duration_seconds = excluded.actual_duration_seconds,
+                    completed = excluded.completed,
+                    mode = excluded.mode,
+                    note = excluded.note"
+            )
+            .bind(&event.id)
+            .bind(&event.started_at)
+            .bind(ended_at_val)
+            .bind(dur)
+            .bind(dur)
+            .bind(completed)
+            .bind(mode)
+            .bind(&event.note)
+            .execute(&state.db)
+            .await?;
+        }
+    }
+
     Ok(())
 }

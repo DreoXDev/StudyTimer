@@ -1,10 +1,9 @@
 <script lang="ts" setup>
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { useRoute } from 'vue-router'
+import { storeToRefs } from 'pinia'
 import { Minimize2, Maximize2, Minus, Square, X, Calendar, CheckSquare } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/ui.store'
-import { storeToRefs } from 'pinia'
-import SmokingCounterDropdown from '@/components/tracking/SmokingCounterDropdown.vue'
 
 const appWindow = getCurrentWindow()
 const uiStore = useUiStore()
@@ -26,8 +25,6 @@ const closeWindow = async () => {
 const navItems = [
   { label: 'Focus', path: '/' },
   { label: 'Stats', path: '/stats' },
-  { label: 'Habits', path: '/habits' },
-  { label: 'Workouts', path: '/workouts' },
   { label: 'Settings', path: '/settings' },
 ]
 </script>
@@ -37,15 +34,12 @@ const navItems = [
     class="h-10 w-full flex items-center justify-between border-b border-border/50 bg-background/85 backdrop-blur-md select-none relative z-50 text-foreground"
     data-tauri-drag-region
   >
-    <!-- Left Section: Title, Icon & Smoking Counter -->
-    <div class="flex items-center gap-3 pl-4 h-full" data-tauri-drag-region>
-      <div class="flex items-center gap-2" data-tauri-drag-region>
-        <div class="h-2 w-2 rounded-full bg-primary animate-pulse"></div>
-        <span class="text-xs font-bold uppercase tracking-wider text-muted-foreground cursor-default font-sans" data-tauri-drag-region>
-          Study Timer
-        </span>
-      </div>
-      <SmokingCounterDropdown />
+    <!-- Left Section: App name indicator (drag region) -->
+    <div class="flex items-center gap-2 pl-4 h-full" data-tauri-drag-region>
+      <div class="h-2 w-2 rounded-full bg-primary animate-pulse"></div>
+      <span class="text-xs font-bold uppercase tracking-wider text-muted-foreground cursor-default font-sans" data-tauri-drag-region>
+        Study Timer
+      </span>
     </div>
 
     <!-- Center Section: Navigation & Sidebar Toggles -->
@@ -53,7 +47,6 @@ const navItems = [
       <!-- Left Sidebar Toggle (Sessioni) — only on Focus page -->
       <div class="w-24 flex justify-end mr-2">
         <button
-          v-if="route.path === '/'"
           class="h-7 px-3 flex items-center gap-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-all duration-200"
           :class="
             sessionsSidebarOpen
@@ -67,7 +60,7 @@ const navItems = [
         </button>
       </div>
 
-      <!-- Main Nav Toggle -->
+      <!-- Main Nav -->
       <div class="flex items-center bg-muted/40 p-0.5 rounded-lg border border-border/30">
         <RouterLink
           v-for="item in navItems"
@@ -87,7 +80,6 @@ const navItems = [
       <!-- Right Sidebar Toggle (Task) — only on Focus page -->
       <div class="w-24 flex justify-start ml-2">
         <button
-          v-if="route.path === '/'"
           class="h-7 px-3 flex items-center gap-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-all duration-200"
           :class="
             tasksSidebarOpen

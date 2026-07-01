@@ -32,7 +32,7 @@ const addManualSession = async () => {
 
   try {
     await sessionStore.createSession({
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
       startedAt: started.toISOString(),
       endedAt: now.toISOString(),
       plannedDurationSeconds: mins * 60,

@@ -37,11 +37,31 @@ export const useUiStore = defineStore('ui', () => {
 
   async function toggleFullscreen() {
     const next = !isFullscreen.value
+    if (next) {
+      try {
+        const isMaximized = await appWindow.isMaximized()
+        if (isMaximized) {
+          await appWindow.unmaximize()
+        }
+      } catch (e) {
+        console.error('Errore nel verificare/unmaximize finestra:', e)
+      }
+    }
     await appWindow.setFullscreen(next)
     isFullscreen.value = next
   }
 
   async function setFullscreen(value: boolean) {
+    if (value) {
+      try {
+        const isMaximized = await appWindow.isMaximized()
+        if (isMaximized) {
+          await appWindow.unmaximize()
+        }
+      } catch (e) {
+        console.error('Errore nel verificare/unmaximize finestra:', e)
+      }
+    }
     await appWindow.setFullscreen(value)
     isFullscreen.value = value
   }

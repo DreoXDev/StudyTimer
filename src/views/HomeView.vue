@@ -22,7 +22,7 @@ import NowPlayingCompact from '@/components/spotify/NowPlayingCompact.vue'
     </main>
 
     <!-- Bottom Layout Section: Left NowPlaying, Center/Right empty (clean look) -->
-    <div class="w-full flex items-end justify-between shrink-0 h-20 z-10">
+    <div class="w-full flex items-end justify-between shrink-0 h-20 z-10 pointer-events-none">
       
       <!-- Bottom Left: System Media controller -->
       <NowPlayingCompact />
